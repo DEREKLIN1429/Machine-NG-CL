@@ -102,6 +102,7 @@
     </style>
 </head>
 <body>
+    
     <div id="status-modal" style="display: none;">
         <div class="modal-box">
             <div id="status-spinner" class="spinner"></div>
@@ -157,11 +158,10 @@
         </div>
     </div>
 
-    <div id="app-screen">
-        <div class="author-header">Author: DERER LIN (v5.0 - CL Fixed)</div>
+    <div id="app-screen" style="display: none;">
+        <div class="author-header">Author: DERER LIN (v5.1 - Date Sort Fixed)</div>
         <div class="header">
-            <div style="width: 36px;"></div>
-            <div class="header-title"><h2>MC_NG_INFO CL<br>上膠機械故障資訊</h2></div>
+            <div style="width: 36px;"></div> <div class="header-title"><h2>Machine-NG CL<br>上膠機械故障資訊</h2></div>
             <div class="header-btn" onclick="openSettings()" title="Settings">⚙️</div>
         </div>
         <div class="input-group">
@@ -235,7 +235,7 @@
         </div>
 
         <div id="recent-records-container" class="card">
-            <h4>最近紀錄 (Recent Records)</h4> <div id="recent-records-list"><p style="text-align: center; color: #999;">Loading recent records...</p></div>
+            <h4>最近紀錄 (Recent Records - Date Sort)</h4> <div id="recent-records-list"><p style="text-align: center; color: #999;">Loading recent records...</p></div>
         </div>
         
         <div class="footer-btns">
@@ -279,11 +279,13 @@
         document.getElementById('total-time-unit').value = "min"; 
         
         document.getElementById('app-screen').style.display = 'block';
-        applySettings(); loadRecentRecords();
+        applySettings(); 
+        loadRecentRecords();
     }
 
     function openSettings(){document.getElementById('settings-modal').style.display='flex';renderConcernListSettings();renderMachineListSettings();}
     function closeSettings(){document.getElementById('settings-modal').style.display='none'}
+    
     function saveSettings(){
         const t=parseFloat(document.getElementById('set-timeout').value);if(!isNaN(t))localStorage.setItem("cfg_timeout",t);
         const limit = parseInt(document.getElementById('set-recent-limit').value);
@@ -403,7 +405,15 @@
         fetch(`${GAS_URL}?action=loadRecords`).then(r=>r.json()).then(res=>{
             listContainer.innerHTML='';
             if(res.result==='success'&&res.data.length>0){
-                const recordsToShow = res.data.slice(0, limit);
+                // ⚠️ 修改：增加日期排序邏輯 (Desc: Newest First)
+                // 使用 parseCustomDateTime 解析時間並進行比對
+                const sortedData = res.data.sort((a, b) => {
+                    const dateA = parseCustomDateTime(a.stopTimeFull) || new Date(0); // 若無效日期視為最舊
+                    const dateB = parseCustomDateTime(b.stopTimeFull) || new Date(0);
+                    return dateB - dateA; // 降冪：時間晚(大)的排前面
+                });
+
+                const recordsToShow = sortedData.slice(0, limit);
                 recordsToShow.forEach(r=>{
                     const i=document.createElement('div');i.className='record-item';i.setAttribute('onclick',`populateForm('${r.formNo}')`);
                     i.innerHTML=`<div class="main-info-group"><span class="form-no-display">#${r.formNo||'N/A'}</span><span class="stop-time-display">🛑 ${r.stopTime||"No Stop Time"}</span></div><div class="details"><div>${r.machine||'N/A'} (${r.concernSection||'N/A'})</div><div>${r.startTime?'Start: '+r.startTime:''}</div></div>`;
@@ -582,18 +592,7 @@ ${action}`;
         const d={image:processedImageBase64,employeeId:document.getElementById('input-employee-id').value,machine:document.getElementById('input-machine').value,stopTimeFull:document.getElementById('input-stop-time-full').value,startTimeFull:document.getElementById('input-start-time-full').value,formNo:document.getElementById('input-form-no').value,reason:document.getElementById('input-reason').value,concernSection:document.getElementById('input-concern-section').value,solution:document.getElementById('input-solution').value,selfActions:document.getElementById('input-self-actions').value,folderId:FIXED_FOLDER_ID};
         if(!d.formNo){alert("Form No required");return}
         saveEmployeeID();showStatus('loading','Uploading...','');
-        
-        fetch(GAS_URL,{
-            method:'POST',
-            body:JSON.stringify(d)
-        })
-        .then(r=>r.json())
-        .then(res=>{
-            if(res.result==='success'){showStatus('success','Saved!',res.action);clearInputs();loadRecentRecords();setTimeout(closeStatusModal,2000)}
-            else{showStatus('error','Failed',res.error)}
-        })
-        .catch(e=>showStatus('error','Error',e.message))
-        .finally(()=>document.getElementById('saveBtn').disabled=false);
+        fetch(GAS_URL,{method:'POST',body:JSON.stringify(d)}).then(r=>r.json()).then(res=>{if(res.result==='success'){showStatus('success','Saved!',res.action);clearInputs();loadRecentRecords();setTimeout(closeStatusModal,2000)}else{showStatus('error','Failed',res.error)}}).catch(e=>showStatus('error','Error',e.message)).finally(()=>document.getElementById('saveBtn').disabled=false);
     }
 </script>
 </body>
